@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% set title = 'Profile' %}
+{% from "_formhelpers.html" import render_field %}
+{% block content %}
+    <form method="POST" action="" enctype="multipart/form-data">
+        {{ form.csrf_token }}
+        <dl>
+            {{ render_field(form.username, class="form-control") }}
+            {{ render_field(form.photo, class="custom-file", id="input_file") }}
+            {{ render_field(form.country, class="form-control") }}
+            {{ render_field(form.bio, class="form-control") }}
+        </dl>
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+{% endblock %}
