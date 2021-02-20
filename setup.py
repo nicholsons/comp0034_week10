@@ -16,6 +16,7 @@ setup(
         'flask-wtf',
         'dash-bootstrap-components',
         'wtforms',
-        'flask-reuploaded'
+        'flask-reuploaded',
+        'Flask-HTTPAuth'
     ],
 )
