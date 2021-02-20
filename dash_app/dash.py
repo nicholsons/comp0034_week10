@@ -1,96 +1,83 @@
 import dash
 import dash_html_components as html
-import dash_core_components as dcc
 import dash_bootstrap_components as dbc
+import dash_core_components as dcc
 from dash.dependencies import Output, Input
 
-from dash_app.chart_creator import ChartCreator
-from data.data import Data
+from recyclingdata import RecyclingData
+from recyclingchart import RecyclingChart, RecyclingBarChart
 
-# Import the data set
-data = Data()
+# Prepare the data
+data = RecyclingData()
+area = 'London'
+data.process_data_for_area(area)
 
+# Create the figures
+rc = RecyclingChart(data)
+fig1 = rc.create_chart(area)
+rcb = RecyclingBarChart(data)
+fig2 = rcb.create_chart('2018/19')
 
-def init_dashboard(server):
-    """
-    Create the Plotly Dash dashboard
+# Create a Dash app
+def init_dashboard(flask_app):
+    """Create a Plotly Dash dashboard."""
+    dash_app = dash.Dash(server=flask_app,
+                         routes_pathname_prefix="/dash_app/",
+                         external_stylesheets=[dbc.themes.LITERA],
+                         )
 
-    :rtype: Plotly app server
-    """
-    # Create the Plotly figures
-    charts = ChartCreator(data.df)
-    fig_total = charts.fig_total()
-    fig_active = charts.fig_active()
-
-    # Create a Dash app
-    dash_app = dash.Dash(external_stylesheets=[dbc.themes.LUX], server=server, routes_pathname_prefix='/dashapp/')
-
-    # Create the app layout
-    # Bootstrap fluid container with 1 row and 2 columns
     dash_app.layout = dbc.Container(fluid=True, children=[
         html.Br(),
-        html.H1('Global Covid-19 daily cases'),
+        html.H1('Waste and recycling'),
+        html.P('Turn London waste into an opportunity – by reducing waste, reusing and recycling more of it.',
+               className='lead'),
         dbc.Row([
-            # Country input and summary statistics panel
-            dbc.Col(md=3, children=[
+            dbc.Col(width=3, children=[
                 dbc.FormGroup([
-                    html.H4("Select Country"),
-                    dcc.Dropdown(id="country", options=[{"label": x, "value": x} for x in data.country_list],
-                                 value="World")
+                    html.H4("Select Area"),
+                    dcc.Dropdown(id="area_select", options=[{"label": x, "value": x} for x in data.area_list],
+                                 value="London")
                 ]),
                 html.Br(),
                 html.Div(id="output-panel")
             ]),
-            # Figures in 2 tabs
-            dbc.Col(md=9, children=[
-                dbc.Col(html.H4("Covid cases"), width={"size": 6, "offset": 3}),
+            dbc.Col(width=9, children=[
                 dbc.Tabs(className="nav nav-pills", children=[
-                    dbc.Tab(dcc.Graph(id="fig-total", figure=fig_total), label="Total cases"),
-                    dbc.Tab(dcc.Graph(id="fig-active", figure=fig_active), label="Active cases")
+                    dbc.Tab(dcc.Graph(id="recycle-chart", figure=fig1), label="Recycling by area"),
+                    dbc.Tab(dcc.Graph(id="recycle-year", figure=fig2), label="Recycling by year"),
                 ])
-            ])
-        ])
+            ]),
+        ]),
     ])
 
-    # Initialize callbacks after our app is loaded
-    # Pass dash_app as a parameter
     init_callbacks(dash_app)
 
     return dash_app.server
 
 
 def init_callbacks(dash_app):
-    @dash_app.callback(Output("output-panel", "children"), [Input("country", "value")])
-    def render_output_panel(country):
-        data.process_data(country)
-        charts = ChartCreator(data.df)
-        peak_day, num_max, total_cases_until_today, active_cases_today = charts.get_stats()
+    @dash_app.callback(Output("output-panel", "children"), [Input("area_select", "value")])
+    def render_output_panel(area_select):
+        data.process_data_for_area(area_select)
         panel = html.Div([
-            html.H4(country, id="card_name"),
+            html.H4(area_select, id="card_name"),
             dbc.Card(body=True, className="bg-dark text-light", children=[
                 html.Br(),
-                html.H6("Total cases until today:", className="card-title"),
-                html.H3("{:,.0f}".format(total_cases_until_today), className="card-text text-light"),
+                html.H6("Compared to England:", className="card-title"),
+                html.H4("{:,.0f}%".format(data.compare_to_eng), className="card-text text-light"),
                 html.Br(),
-                html.H6("Active cases today:", className="card-title"),
-                html.H3("{:,.0f}".format(active_cases_today), className="card-text text-light"),
+                html.H6("Compared to previous year:".format(area=area), className="card-title"),
+                html.H4("{:,.0f}%".format(data.change_area), className="card-text text-light"),
                 html.Br(),
-                html.H6("Peak day:", className="card-title"),
-                html.H3(peak_day.strftime("%d-%m-%Y"), className="card-text text-light"),
-                html.H6("with {:,.0f} cases".format(num_max), className="card-title text-light"),
+                html.H6("Best period:", className="card-title"),
+                html.H4(data.best_period, className="card-text text-light"),
+                html.H6("with recycling rate {:,.0f}%".format(data.best_rate), className="card-title text-light"),
                 html.Br()
             ])
         ])
         return panel
 
-    @dash_app.callback(Output("fig-total", "figure"), [Input("country", "value")])
-    def plot_total_cases(country):
-        data.process_data(country)
-        charts = ChartCreator(data.df)
-        return charts.fig_total()
-
-    @dash_app.callback(Output("fig-active", "figure"), [Input("country", "value")])
-    def plot_active_cases(country):
-        data.process_data(country)
-        charts = ChartCreator(data.df)
-        return charts.fig_active()
+    @dash_app.callback(Output("recycle-chart", "figure"), [Input("area_select", "value")])
+    def update_recycling_chart(area_select):
+        fig = rc.create_chart(area_select)
+        return fig

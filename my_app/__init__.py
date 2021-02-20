@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+import pandas as pd
 from flask import Flask
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
@@ -12,51 +15,50 @@ photos = UploadSet('photos', IMAGES)
 
 def create_app(config_classname):
     """
-    Initialises and configures the Flask application.
+    Initialise and configure the Flask application.
     :type config_classname: Specifies the configuration class
     :rtype: Returns a configured Flask object
     """
-    app = Flask(__name__)
+    app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_classname)
 
+    # ensure the instance folder exists
+    try:
+        os.makedirs(app.instance_path)
+    except OSError:
+        pass
+
     db.init_app(app)
+    login_manager.login_view = 'auth.login'
     login_manager.init_app(app)
     csrf.init_app(app)
     configure_uploads(app, photos)
 
     with app.app_context():
-        from my_app.models import User, Country, Profile
+        from my_app.models import User, Profile, Area
         db.create_all()
-        add_countries(app)
+
+        # Uncomment the following if you want to experiment with reflection
+        # db.Model.metadata.reflect(bind=db.engine)
+
+        # Add the local authority data to the database (this is a workaround you don't need this for your coursework!)
+        # csv_file = Path(__file__).parent.parent.joinpath("data/household_recycling.csv")
+        csv_file = Path(__file__).joinpath(app.instance_path).joinpath('data/household_recycling.csv')
+        la_data = pd.read_csv(csv_file, usecols=['Code', 'Area'])
+        la_data.drop_duplicates(inplace=True)
+        la_data.set_index('Code', inplace=True)
+        la_data.to_sql('area', db.engine, if_exists='replace')
 
         from dash_app.dash import init_dashboard
         app = init_dashboard(app)
 
-    from my_app.main.main import main_bp
+    from my_app.main.routes import main_bp
     app.register_blueprint(main_bp)
 
-    from my_app.auth.auth import auth_bp
-    app.register_blueprint(auth_bp)
-
-    from my_app.community.community import community_bp
+    from my_app.community.routes import community_bp
     app.register_blueprint(community_bp)
 
+    from my_app.auth.routes import auth_bp
+    app.register_blueprint(auth_bp)
+
     return app
-
-
-def add_countries(app):
-    """
-    Adds the list of countries to the database if it doesn't already exist
-    :param app:
-    """
-    from my_app.models import Country
-    exists = Country.query.filter_by(id=1).scalar() is not None
-    if not exists:
-        data_path = app.config['DATA_PATH']
-        with open(data_path.joinpath('countries.txt'), "r") as countries:
-            for country in countries:
-                country = country.split("|")
-                country[1] = country[1].rstrip('\n')
-                c = Country(country_name=country[1])
-                db.session.add(c)
-            db.session.commit()

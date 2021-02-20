@@ -8,5 +8,14 @@ setup(
     zip_safe=False,
     install_requires=[
         'flask',
+        'plotly',
+        'pandas',
+        'dash',
+        'flask-login',
+        'flask-sqlalchemy',
+        'flask-wtf',
+        'dash-bootstrap-components',
+        'wtforms',
+        'flask-reuploaded'
     ],
 )
